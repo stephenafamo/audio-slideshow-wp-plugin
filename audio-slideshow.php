@@ -23,12 +23,12 @@ if (!class_exists("AudioSlideshow")) {
             $this->options = get_option($this->plugin_name);
             $this->options['post_types'] = [];
 
-            add_filter( 'plugin_action_links_' . plugin_basename(__FILE__), [$this, 'add_action_links'] );
+            // add_filter( 'plugin_action_links_' . plugin_basename(__FILE__), [$this, 'add_action_links'] );
             add_filter( 'mime_types', [$this, 'custom_upload_mimes'], 1);
             add_filter( 'add_meta_boxes', [$this, 'add_custom_meta_box']);
             add_action( 'save_post', [$this, 'save_custom_meta_box'], 10, 2);    
-            add_action( 'admin_menu', [ $this, 'add_settings_menu'] );
-            add_action( 'admin_init', [ $this, 'options_update'] );
+            // add_action( 'admin_menu', [ $this, 'add_settings_menu'] );
+            // add_action( 'admin_init', [ $this, 'options_update'] );
             add_action( 'admin_enqueue_scripts', [ $this, 'media_lib_uploader_enqueue']);
             add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend'] );
             add_action( 'init',  [ $this, 'slideshow_init']);
