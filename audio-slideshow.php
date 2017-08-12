@@ -11,7 +11,7 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.txt
 */
 
 if (!class_exists("AudioSlideshow")) {
-    
+
     class AudioSlideshow {
 
         public function __construct ($attributes = [])
@@ -21,7 +21,7 @@ if (!class_exists("AudioSlideshow")) {
             }
 
             $this->options = get_option($this->plugin_name);
-            $this->options['post_types'] = $this->options['post_types'] ? $this->options['post_types'] : $this->default_post_types;
+            $this->options['post_types'] = [];
 
             add_filter( 'plugin_action_links_' . plugin_basename(__FILE__), [$this, 'add_action_links'] );
             add_filter( 'mime_types', [$this, 'custom_upload_mimes'], 1);
@@ -29,9 +29,12 @@ if (!class_exists("AudioSlideshow")) {
             add_filter( 'template_include', [$this, 'load_custom_template'], 111, 1);
             add_filter( 'add_meta_boxes', [$this, 'add_custom_meta_box']);
             add_action( 'save_post', [$this, 'save_custom_meta_box'], 10, 2);    
-            // add_action( 'admin_menu', [ $this, 'add_settings_menu'] );
-            // add_action('admin_init', [ $this, 'options_update'] );
-            // add_action('admin_enqueue_scripts', [ $this, 'media_lib_uploader_enqueue']);
+            add_action( 'admin_menu', [ $this, 'add_settings_menu'] );
+            add_action( 'admin_init', [ $this, 'options_update'] );
+            add_action( 'admin_enqueue_scripts', [ $this, 'media_lib_uploader_enqueue']);
+            add_action( 'init',  [ $this, 'slideshow_init']);
+            add_action( 'edit_form_after_title',  [ $this,  'embedding_instructions'] );
+            add_filter( 'gettext', [ $this,  'change_publish_button'], 10, 2 );
         }
 
         public function add_action_links( $links ) 
@@ -39,52 +42,33 @@ if (!class_exists("AudioSlideshow")) {
             /*
             *  Documentation : https://codex.wordpress.org/Plugin_API/Filter_Reference/plugin_action_links_(plugin_file_name)
             */
-           $settings_link = array(
-            '<a href="' . admin_url( 'options-general.php?page=' . $this->plugin_name ) . '">Settings</a>',
-           );
-           return array_merge(  $settings_link, $links );
+            $settings_link = array(
+                '<a href="' . admin_url( 'options-general.php?page=' . $this->plugin_name ) . '">Settings</a>',
+                );
+            return array_merge(  $settings_link, $links );
         }
 
         public function custom_upload_mimes( $existing_mimes ) 
         {
             // add webm to the list of mime types
             if (!in_array("application/javascript", $existing_mimes))
-            $existing_mimes['js'] = 'application/javascript';
+                $existing_mimes['js'] = 'application/javascript';
             // return the array back to the function with our added mime type
             return $existing_mimes;
         }
 
-        public function load_custom_template ($single_template)
-        {
-            global $post;
-
-            if (!in_array($post->post_type, $this->options['post_types']))
-                return $single_template;
-
-            $file = wp_upload_dir()['basedir'] . '/' . $this->options['default_settings'][$post->post_type]['agadyn_custom_template_path'];
-            $options = $this->options['default_settings'][$post->post_type]['agadyn_custom_template_options'];
-
-            $specific_file = wp_upload_dir()['basedir'] . '/' . get_post_meta($post->ID, '_agadyn_custom_template_path', true);
-            
-            if(is_file($specific_file))  {
-                $file = $specific_file;
-                $options = get_post_meta($post->ID, '_agadyn_custom_template_options', true);
-            }
-
-            if (is_file($file)){
-
-                switch ($options) {
-
-                    case 'below_content':
-                        $post->post_content .= '<br> [html_php_page_post]';
-                        break;
-
-                    case 'above_content':
-                        $post->post_content = '[html_php_page_post] <br>'.$post->post_content;
-                        break;
-                }
-            }
-            return $single_template;
+        public function embedding_instructions( $post ) 
+        { 
+            if ($post->post_type !== 'slideshow' && $post->id !== null) return;
+            ?>
+            <div class="after-title-help postbox">
+                <h3>Using the slideshow</h3>
+                <div class="inside">
+                    <p>Embed this in any post by pasting the following shortcode.</p>
+                    <pre>[audio_slideshow id=<?= $post->ID ?>]</pre>
+                </div><!-- .inside -->
+            </div><!-- .postbox -->
+            <?php 
         }
 
         public function add_custom_meta_box()
@@ -92,9 +76,9 @@ if (!class_exists("AudioSlideshow")) {
             $post_types = apply_filters ( 'hppp_post_types', $this->options['post_types']);
             add_meta_box( 
                 'agadyn_custom_template', 
-                'Custom HTML or PHP', 
+                'Sldeshow Details', 
                 array($this, 'custom_meta_box_markup'),
-                $post_types,
+                'slideshow',
                 'normal',
                 'high');
 
@@ -105,69 +89,83 @@ if (!class_exists("AudioSlideshow")) {
 
             $template_post_id = get_post_meta($object->ID, "_agadyn_custom_template_id", true);
 
-            $default_values = [];
-            $default_values['agadyn_custom_template_path'] = get_post_meta($object->ID, "_agadyn_custom_template_path", true);
-            $default_values['agadyn_custom_template_id'] = $template_post_id;
-            $default_values['agadyn_custom_template_options'] = get_post_meta($object->ID, "_agadyn_custom_template_options", true);
-            
+            $audio_slideshow_audio = get_post_meta($object->ID, "_audio_slideshow_audio", true);
+            $audio_slideshow_slides = get_post_meta($object->ID, "_audio_slideshow_slides", true);
+            $slides_div = "slides_div";
+
             wp_nonce_field(basename(__FILE__), "meta-box-nonce");
+            ?>
+            <h3>Audio</h3>
+            <div style="padding-bottom: 5px; padding-bottom: 5px;">
+                <div style="padding-bottom: 5px; padding-bottom: 5px;">
+                    <label for="agadyn_custom_template">Url for audio</label>
+                </div>
+                <div style="padding-bottom: 5px; padding-top: 5px;">
+                    <input name="audio_slideshow_audio" 
+                            id="audio_slideshow_audio" 
+                            type="text" value="<?= $audio_slideshow_audio ?>" > 
+                </div>
+                <input id="upload_template_button" type="button" class="button button-primary" value="<?php _e( 'Select/Upload audio' ); ?>" 
+                onclick="select_media_template(event, <?php echo "'audio_slideshow_audio'"; ?>, 'audio')"/>
 
-            echo $this->template_options_markup ($template_post_id, $default_values);
+            </div>
+            <h3>Slides</h3>
+            <div id="<?= $slides_div ?>">
 
+            <?php
+
+            if(is_array($audio_slideshow_slides)) {
+                foreach ($audio_slideshow_slides as $key => $slide) {
+                    # code...
+                    echo $this->slides_insert_markup ( $slide, "audio_slideshow_slides[$key", "]", $key);
+                }
+                $key++;
+            } else $key = 0;
+
+            echo $this->slides_insert_markup ( [], "audio_slideshow_slides[{$key}", "]", $key);
+            ?> 
+            </div> 
+            <div style="padding-bottom: 5px; padding-top: 25px;" > 
+            <script type="text/javascript">
+                window.key = <?= ++$key ?>;
+            </script>
+
+            <input id="upload_template_button" type="button" class="button button-primary" value="<?php _e( 'ADD SLIDE' ); ?>" 
+            onclick="insertSlide(event, <?= "'$slides_div', 'audio_slideshow_slides[', ']')" ?>"/>
+            </div> 
+            <?php
         }
 
-        public function template_options_markup ($template_post_id = 0, $default_values = [], $unique_prefix = null, $unique_suffix = null)
+        public function slides_insert_markup ($default_values = [], $unique_prefix = null, $unique_suffix = null, $key)
         {
-            if (!$template_post_id) $template_post_id = 0;
             if (!$default_values) $default_values = [];
-
             ?>
 
-                <div>
-                    <label for="agadyn_custom_template">Link to custom template</label>
-
-
-                    <input name="<?php echo $unique_prefix; ?>agadyn_custom_template_path<?php echo $unique_suffix; ?>" id="<?php echo $unique_prefix; ?>agadyn_custom_template_path<?php echo $unique_suffix; ?>" type="text" value="<?php echo $default_values['agadyn_custom_template_path'] ?>" readonly> 
-                    <br/>
-                    <input id="upload_template_button" type="button" class="button" value="<?php _e( 'Select/Upload template' ); ?>" 
-                            onclick="select_template(event, <?php echo "'$unique_prefix', '$unique_suffix'"; ?>)"/>
-                    <input id="delete_template_button" type="button" class="button" value="<?php _e( 'Delete template' ); ?>"
-                            onclick="delete_template(event, <?php echo "'$unique_prefix', '$unique_suffix'"; ?>)"/>
-                    <br/>
-                    <input name="<?php echo $unique_prefix; ?>agadyn_custom_template_id<?php echo $unique_suffix; ?>" id="<?php echo $unique_prefix; ?>agadyn_custom_template_id<?php echo $unique_suffix; ?>" type="hidden" value="<?php echo $default_values['agadyn_custom_template_id'] ?>">
-
-                    <br>
-
-                    <label for="agadyn_custom_template_options">Options</label>
-                    <select name="<?php echo $unique_prefix; ?>agadyn_custom_template_options<?php echo $unique_suffix; ?>" id="<?php echo $unique_prefix; ?>agadyn_custom_template_options<?php echo $unique_suffix; ?>">
-                        <?php 
-                            $option_values = [
-                                'overwrite_all' => 'Overwrite All', 
-                                'overwrite_content' => 'Overwrite Content', 
-                                'below_content' => 'Below Content', 
-                                'above_content' => 'Above Content'];
-
-                            foreach($option_values as $key => $value) 
-                            {
-                                if($key == $default_values['agadyn_custom_template_options'])
-                                {
-                                    ?>
-                                        <option value="<?php echo $key?>" selected><?php echo $value; ?></option>
-                                    <?php    
-                                }
-                                else
-                                {
-                                    ?>
-                                        <option value="<?php echo $key?>"><?php echo $value; ?></option>
-                                    <?php
-                                }
-                            }
-                        ?>
-                    </select>
-
-                    <br>
-
+            <div style="padding-bottom: 5px; padding-top: 5px;" id="slide_<?= $key ?>_div">
+                <div style="padding-bottom: 5px; padding-bottom: 5px;">
+                    <label for="<?= $unique_prefix; ?><?= $unique_suffix; ?>[time]">Time</label>
                 </div>
+                <div style="padding-bottom: 5px; padding-top: 5px;">
+                    <input name="<?= $unique_prefix; ?><?= $unique_suffix; ?>[time]"
+                            id="<?= $unique_prefix; ?><?= $unique_suffix; ?>[time]"
+                            type="number" value="<?= $default_values['time'] ?>" > 
+                </div>
+                <div style="padding-bottom: 5px; padding-top: 5px;">
+                    <label for="<?= $unique_prefix; ?><?= $unique_suffix; ?>[markup]">HTML for slide</label>
+                </div>
+                <div style="padding-bottom: 5px; padding-top: 5px;">
+                    <textarea name="<?= $unique_prefix; ?><?= $unique_suffix; ?>[markup]" 
+                            id="<?= $unique_prefix; ?><?= $unique_suffix; ?>[markup]"
+                            rows="10"
+                            value="" ><?= $default_values['markup'] ?></textarea>
+                </div>
+                <input id="upload_image_buttom" type="button" class="button button-primary" value="<?php _e( 'Select/Upload image' ); ?>" 
+                onclick="select_media_template(event, <?= "'{$unique_prefix}{$unique_suffix}[markup]'"; ?>)"/>
+
+                <input id="upload_template_button" type="button" class="button-secondary delete" value="<?php _e( 'Delete Slide' ); ?>" 
+                onclick="delete_slide(event, <?= "'slide_{$key}_div'"; ?>)"/>
+
+            </div>
 
             <?php
         }
@@ -184,29 +182,35 @@ if (!class_exists("AudioSlideshow")) {
             if(defined("DOING_AUTOSAVE") && DOING_AUTOSAVE)
                 return $post_id;
 
-            if(isset($_POST["agadyn_custom_template_id"]))
+            if(isset($_POST["audio_slideshow_audio"]))
             {
-                $agadyn_custom_template_id = $_POST["agadyn_custom_template_id"];
-                $agadyn_custom_template_path = get_post_meta( $_POST["agadyn_custom_template_id"], '_wp_attached_file', true );
+                $audio_slideshow_audio = $_POST["audio_slideshow_audio"];
             }   
-            update_post_meta($post_id, "_agadyn_custom_template_id", $agadyn_custom_template_id);
-            update_post_meta($post_id, "_agadyn_custom_template_path", $agadyn_custom_template_path);
+            update_post_meta($post_id, "_audio_slideshow_audio", $audio_slideshow_audio);
 
-            if(isset($_POST["agadyn_custom_template_options"]))
+            if(isset($_POST["audio_slideshow_slides"]) && is_array($_POST["audio_slideshow_slides"]))
             {
-                $agadyn_custom_template_options = $_POST["agadyn_custom_template_options"];
+                $audio_slideshow_slides = array_values($_POST["audio_slideshow_slides"]);
             }   
-            update_post_meta($post_id, "_agadyn_custom_template_options", $agadyn_custom_template_options);
+            update_post_meta($post_id, "_audio_slideshow_slides", $audio_slideshow_slides);
+        }
+
+        public function change_publish_button( $translation, $text ) 
+        {
+            if ( 'slideshow' == get_post_type() && ($text == 'Publish' || $text == 'Update' ))
+                return 'Save';
+
+            return $translation;
         }
 
         public function add_settings_menu()
         {
             add_options_page(
-                    'Audio Slideshow Settings',
-                    'Audio Slideshow',
-                    'manage_options',
-                    $this->plugin_name,
-                    [ $this, 'settings_page']
+                'Audio Slideshow Settings',
+                'Audio Slideshow',
+                'manage_options',
+                $this->plugin_name,
+                [ $this, 'settings_page']
                 );
         }
 
@@ -221,8 +225,37 @@ if (!class_exists("AudioSlideshow")) {
         }
 
         public function validate_options($input) 
-        {
-            return $input;
+        {       
+            $valid = [];
+
+            foreach ($input['post_types'] as $key => $post_type) 
+            {
+                $valid['post_types'][] = filter_var($post_type, FILTER_SANITIZE_STRING);
+            }
+
+            foreach ($input['default_settings'] as $post_type => $settings) 
+            {
+                $agadyn_custom_template_id = '';
+                $agadyn_custom_template_path = '';
+                $agadyn_custom_template_options = '';
+                if(isset($settings["agadyn_custom_template_id"]))
+                {
+                    $agadyn_custom_template_id = $settings["agadyn_custom_template_id"];
+                    $agadyn_custom_template_path = get_post_meta( $settings["agadyn_custom_template_id"], '_wp_attached_file', true );
+
+                }
+                if(isset($settings["agadyn_custom_template_options"]))
+                {
+                    $agadyn_custom_template_options = $settings["agadyn_custom_template_options"];
+                }   
+                $valid['default_settings'][$post_type]['agadyn_custom_template_id'] = $agadyn_custom_template_id;
+                $valid['default_settings'][$post_type]['agadyn_custom_template_path'] = $agadyn_custom_template_path;
+                $valid['default_settings'][$post_type]['agadyn_custom_template_options'] = $agadyn_custom_template_options;
+            }
+
+            // var_dump($input, $valid);
+
+            return $valid;
         }
 
         /* Add the media uploader script */
@@ -232,7 +265,44 @@ if (!class_exists("AudioSlideshow")) {
             wp_register_script( 'audio-slideshow-media-lib-uploader-js', plugins_url( 'partials/uploader.js' , __FILE__ ), array('jquery') );
             wp_enqueue_script( 'audio-slideshow-media-lib-uploader-js' );
         }
-  
+
+        function slideshow_init() {
+            $labels = array(
+                'name'               => _x( 'Slideshows', 'post type general name', 'your-plugin-textdomain' ),
+                'singular_name'      => _x( 'Slideshow', 'post type singular name', 'your-plugin-textdomain' ),
+                'menu_name'          => _x( 'Slideshows', 'admin menu', 'your-plugin-textdomain' ),
+                'name_admin_bar'     => _x( 'Slideshow', 'add new on admin bar', 'your-plugin-textdomain' ),
+                'add_new'            => _x( 'Add New', 'slideshow', 'your-plugin-textdomain' ),
+                'add_new_item'       => __( 'Add New Slideshow', 'your-plugin-textdomain' ),
+                'new_item'           => __( 'New Slideshow', 'your-plugin-textdomain' ),
+                'edit_item'          => __( 'Edit Slideshow', 'your-plugin-textdomain' ),
+                'view_item'          => __( 'View Slideshow', 'your-plugin-textdomain' ),
+                'all_items'          => __( 'All Slideshows', 'your-plugin-textdomain' ),
+                'search_items'       => __( 'Search Slideshows', 'your-plugin-textdomain' ),
+                'parent_item_colon'  => __( 'Parent Slideshows:', 'your-plugin-textdomain' ),
+                'not_found'          => __( 'No slideshows found.', 'your-plugin-textdomain' ),
+                'not_found_in_trash' => __( 'No slideshows found in Trash.', 'your-plugin-textdomain' )
+                );
+
+            $args = array(
+                'labels'             => $labels,
+                'description'        => __( 'Description.', 'your-plugin-textdomain' ),
+                'public'             => false,
+                'publicly_queryable' => false,
+                'show_ui'            => true,
+                'show_in_menu'       => true,
+                'query_var'          => true,
+                'rewrite'            => array( 'slug' => 'slideshows' ),
+                'capability_type'    => 'post',
+                'has_archive'        => false,
+                'hierarchical'       => false,
+                'menu_position'      => null,
+                'supports'           => array( 'title', 'author' )
+                );
+
+            register_post_type( 'slideshow', $args );
+        }
+
     } // end class 
     
 } // end check for class
@@ -240,5 +310,4 @@ if (!class_exists("AudioSlideshow")) {
 // Begin!!!
 $attributes = [];
 $attributes['plugin_name'] = 'audio-slideshow';
-$attributes['default_post_types'] = ["post", "page"];
 $class = new AudioSlideshow($attributes);
