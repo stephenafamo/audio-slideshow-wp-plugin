@@ -279,6 +279,8 @@ if (!class_exists("AudioSlideshow")) {
 
         function enqueue_frontend() 
         {
+            wp_register_style( 'audio-slideshow-css', plugins_url( 'partials/audio-slideshow-0.1.0.css' , __FILE__ ), [],  '0.1.0');
+            wp_enqueue_style( 'audio-slideshow-css' );
             wp_register_script( 'audio-slideshow-js', plugins_url( 'partials/audio-slideshow-0.1.0.js' , __FILE__ ), [],  '0.1.0', true);
             wp_enqueue_script( 'audio-slideshow-js' );
         }
@@ -328,20 +330,21 @@ if (!class_exists("AudioSlideshow")) {
 
             if (!$a['id']) return;
 
+            $random_number = mt_rand(1,100);
             $audio_slideshow_audio = get_post_meta($a['id'], "_audio_slideshow_audio", true);
             $audio_slideshow_audio_type = get_post_meta($a['id'], "_audio_slideshow_audio_type", true);
             $audio_slideshow_slides = get_post_meta($a['id'], "_audio_slideshow_slides", true);
 
             ob_start(); ?>
-            <div>
-                <audio controls data-audio-show="audio_slideshow_slides"> <source src="<?= $audio_slideshow_audio ?>" type="<?= $audio_slideshow_audio_type ?>" /> </audio>
-            </div> 
-            <div id="audio_slideshow_slides">
+            <div id="audio_slideshow_audio_<?= $random_number ?>" class="audioDiv">
+                <audio controls data-audio-show="audio_slideshow_slides_<?= $random_number ?>"> <source src="<?= $audio_slideshow_audio ?>" type="<?= $audio_slideshow_audio_type ?>" /> </audio>
+            </div class="slidesDiv"> 
+            <div id="audio_slideshow_slides_<?= $random_number ?>" class="slideDiv">
                 <?php
                 if(is_array($audio_slideshow_slides)) {
                     foreach ($audio_slideshow_slides as $key => $slide) {
                         ?>
-                        <div data-slide-start="<?= $slide['time'] ?>" id="<?= $key ?>" style="display: none;"><?= $slide['markup'] ?></div>
+                        <div data-slide-start="<?= $slide['time'] ?>" id="audio_slideshow_slide_<?= $random_number ?>_<?= $key ?>" style="display: none;"><?= $slide['markup'] ?></div>
                         <?php
                     }
                 } 
