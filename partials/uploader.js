@@ -27,9 +27,9 @@ function select_media_template(event, identifier, type)
     }
     // Create the media frame.
     file_frame = wp.media.frames.file_frame = wp.media({
-        title: 'Select a template to upload',
+        title: 'Select media',
         button: {
-            text: 'Use this template',
+            text: 'Select',
         },
         multiple: false // Set to true to allow multiple files to be selected
     });

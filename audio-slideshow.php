@@ -25,16 +25,17 @@ if (!class_exists("AudioSlideshow")) {
 
             add_filter( 'plugin_action_links_' . plugin_basename(__FILE__), [$this, 'add_action_links'] );
             add_filter( 'mime_types', [$this, 'custom_upload_mimes'], 1);
-            add_filter( 'single_template', [$this, 'load_custom_template'], 111, 1);
-            add_filter( 'template_include', [$this, 'load_custom_template'], 111, 1);
             add_filter( 'add_meta_boxes', [$this, 'add_custom_meta_box']);
             add_action( 'save_post', [$this, 'save_custom_meta_box'], 10, 2);    
             add_action( 'admin_menu', [ $this, 'add_settings_menu'] );
             add_action( 'admin_init', [ $this, 'options_update'] );
             add_action( 'admin_enqueue_scripts', [ $this, 'media_lib_uploader_enqueue']);
+            add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend'] );
             add_action( 'init',  [ $this, 'slideshow_init']);
             add_action( 'edit_form_after_title',  [ $this,  'embedding_instructions'] );
             add_filter( 'gettext', [ $this,  'change_publish_button'], 10, 2 );
+
+            add_shortcode( 'audio_slideshow', [$this, 'shortcode_parser']); 
         }
 
         public function add_action_links( $links ) 
@@ -86,28 +87,35 @@ if (!class_exists("AudioSlideshow")) {
 
         public function custom_meta_box_markup($object) 
         {
-
-            $template_post_id = get_post_meta($object->ID, "_agadyn_custom_template_id", true);
-
             $audio_slideshow_audio = get_post_meta($object->ID, "_audio_slideshow_audio", true);
+            $audio_slideshow_audio_type = get_post_meta($object->ID, "_audio_slideshow_audio_type", true);
             $audio_slideshow_slides = get_post_meta($object->ID, "_audio_slideshow_slides", true);
             $slides_div = "slides_div";
 
             wp_nonce_field(basename(__FILE__), "meta-box-nonce");
             ?>
             <h3>Audio</h3>
-            <div style="padding-bottom: 5px; padding-bottom: 5px;">
-                <div style="padding-bottom: 5px; padding-bottom: 5px;">
-                    <label for="agadyn_custom_template">Url for audio</label>
+            <div style="padding-bottom: 5px; padding-top: 5px;">
+                <div style="padding-bottom: 5px; padding-top: 5px;">
+                    <label for="audio_slideshow_audio">Url for audio</label>
                 </div>
                 <div style="padding-bottom: 5px; padding-top: 5px;">
                     <input name="audio_slideshow_audio" 
-                            id="audio_slideshow_audio" 
-                            type="text" value="<?= $audio_slideshow_audio ?>" > 
+                    id="audio_slideshow_audio" 
+                    type="text" value="<?= $audio_slideshow_audio ?>" > 
                 </div>
                 <input id="upload_template_button" type="button" class="button button-primary" value="<?php _e( 'Select/Upload audio' ); ?>" 
                 onclick="select_media_template(event, <?php echo "'audio_slideshow_audio'"; ?>, 'audio')"/>
-
+                <div style="padding-bottom: 5px; padding-top: 15px;">
+                    <label for="audio_slideshow_audio_type">Audio Type</label>
+                </div>
+                <div style="padding-bottom: 5px; padding-top: 5px;">
+                    <select name="audio_slideshow_audio_type" id="audio_slideshow_audio_type" >
+                        <option value="audio/mpeg"<?php if($audio_slideshow_audio_type == "audio/mpeg") echo "selected" ?> >MP3</option>
+                        <option value="audio/wav"<?php if($audio_slideshow_audio_type == "audio/wav") echo "selected" ?> >WAV</option>
+                        <option value="audio/ogg"<?php if($audio_slideshow_audio_type == "audio/ogg") echo "selected" ?> >OGG</option>
+                    </select>
+                </div>
             </div>
             <h3>Slides</h3>
             <div id="<?= $slides_div ?>">
@@ -116,13 +124,10 @@ if (!class_exists("AudioSlideshow")) {
 
             if(is_array($audio_slideshow_slides)) {
                 foreach ($audio_slideshow_slides as $key => $slide) {
-                    # code...
                     echo $this->slides_insert_markup ( $slide, "audio_slideshow_slides[$key", "]", $key);
                 }
                 $key++;
             } else $key = 0;
-
-            echo $this->slides_insert_markup ( [], "audio_slideshow_slides[{$key}", "]", $key);
             ?> 
             </div> 
             <div style="padding-bottom: 5px; padding-top: 25px;" > 
@@ -187,6 +192,12 @@ if (!class_exists("AudioSlideshow")) {
                 $audio_slideshow_audio = $_POST["audio_slideshow_audio"];
             }   
             update_post_meta($post_id, "_audio_slideshow_audio", $audio_slideshow_audio);
+
+            if(isset($_POST["audio_slideshow_audio_type"]))
+            {
+                $audio_slideshow_audio_type = $_POST["audio_slideshow_audio_type"];
+            }   
+            update_post_meta($post_id, "_audio_slideshow_audio_type", $audio_slideshow_audio_type);
 
             if(isset($_POST["audio_slideshow_slides"]) && is_array($_POST["audio_slideshow_slides"]))
             {
@@ -266,6 +277,12 @@ if (!class_exists("AudioSlideshow")) {
             wp_enqueue_script( 'audio-slideshow-media-lib-uploader-js' );
         }
 
+        function enqueue_frontend() 
+        {
+            wp_register_script( 'audio-slideshow-js', plugins_url( 'partials/audio-slideshow-0.1.0.js' , __FILE__ ), [],  '0.1.0', true);
+            wp_enqueue_script( 'audio-slideshow-js' );
+        }
+
         function slideshow_init() {
             $labels = array(
                 'name'               => _x( 'Slideshows', 'post type general name', 'your-plugin-textdomain' ),
@@ -301,6 +318,36 @@ if (!class_exists("AudioSlideshow")) {
                 );
 
             register_post_type( 'slideshow', $args );
+        }
+
+        public function shortcode_parser( $atts, $content = null ) 
+        {
+            $a = shortcode_atts( array(
+                'id' => null,
+                ), $atts );
+
+            if (!$a['id']) return;
+
+            $audio_slideshow_audio = get_post_meta($a['id'], "_audio_slideshow_audio", true);
+            $audio_slideshow_audio_type = get_post_meta($a['id'], "_audio_slideshow_audio_type", true);
+            $audio_slideshow_slides = get_post_meta($a['id'], "_audio_slideshow_slides", true);
+
+            ob_start(); ?>
+            <div>
+                <audio controls data-audio-show="audio_slideshow_slides"> <source src="<?= $audio_slideshow_audio ?>" type="<?= $audio_slideshow_audio_type ?>" /> </audio>
+            </div> 
+            <div id="audio_slideshow_slides">
+                <?php
+                if(is_array($audio_slideshow_slides)) {
+                    foreach ($audio_slideshow_slides as $key => $slide) {
+                        ?>
+                        <div data-slide-start="<?= $slide['time'] ?>" id="<?= $key ?>" style="display: none;"><?= $slide['markup'] ?></div>
+                        <?php
+                    }
+                } 
+                ?>
+            </div> <?php
+            return ob_get_clean();
         }
 
     } // end class 
