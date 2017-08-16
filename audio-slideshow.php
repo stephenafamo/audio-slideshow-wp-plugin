@@ -23,12 +23,9 @@ if (!class_exists("AudioSlideshow")) {
             $this->options = get_option($this->plugin_name);
             $this->options['post_types'] = [];
 
-            // add_filter( 'plugin_action_links_' . plugin_basename(__FILE__), [$this, 'add_action_links'] );
             add_filter( 'mime_types', [$this, 'custom_upload_mimes'], 1);
             add_filter( 'add_meta_boxes', [$this, 'add_custom_meta_box']);
-            add_action( 'save_post', [$this, 'save_custom_meta_box'], 10, 2);    
-            // add_action( 'admin_menu', [ $this, 'add_settings_menu'] );
-            // add_action( 'admin_init', [ $this, 'options_update'] );
+            add_action( 'save_post', [$this, 'save_custom_meta_box'], 10, 2);
             add_action( 'admin_enqueue_scripts', [ $this, 'media_lib_uploader_enqueue']);
             add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend'] );
             add_action( 'init',  [ $this, 'slideshow_init']);
@@ -189,19 +186,25 @@ if (!class_exists("AudioSlideshow")) {
 
             if(isset($_POST["audio_slideshow_audio"]))
             {
-                $audio_slideshow_audio = $_POST["audio_slideshow_audio"];
+                $audio_slideshow_audio = esc_url($_POST["audio_slideshow_audio"]);
             }   
             update_post_meta($post_id, "_audio_slideshow_audio", $audio_slideshow_audio);
 
             if(isset($_POST["audio_slideshow_audio_type"]))
             {
-                $audio_slideshow_audio_type = $_POST["audio_slideshow_audio_type"];
+                if (in_array($_POST["audio_slideshow_audio_type"], ["audio/mpeg", "audio/wav", "audio/ogg"]))
+                    $audio_slideshow_audio_type = filter_var($_POST["audio_slideshow_audio_type"], FILTER_SANITIZE_STRING);
             }   
             update_post_meta($post_id, "_audio_slideshow_audio_type", $audio_slideshow_audio_type);
 
             if(isset($_POST["audio_slideshow_slides"]) && is_array($_POST["audio_slideshow_slides"]))
             {
-                $audio_slideshow_slides = array_values($_POST["audio_slideshow_slides"]);
+                foreach ($_POST["audio_slideshow_slides"] as $key => $slide) {
+                    if (is_numeric($slide['time'])) {
+                        $audio_slideshow_slides[] = [ "time" => filter_var($slide['time'], FILTER_SANITIZE_NUMBER_INT), 
+                        "markup" => htmlspecialchars($slide['markup']) ];                 
+                    }
+                }
             }   
             update_post_meta($post_id, "_audio_slideshow_slides", $audio_slideshow_slides);
         }
@@ -223,50 +226,6 @@ if (!class_exists("AudioSlideshow")) {
                 $this->plugin_name,
                 [ $this, 'settings_page']
                 );
-        }
-
-        function  settings_page() 
-        {
-            include_once( 'partials/settings-page-display.php' );
-        }
-
-        function options_update() 
-        {
-            register_setting($this->plugin_name, $this->plugin_name, array($this, 'validate_options'));
-        }
-
-        public function validate_options($input) 
-        {       
-            $valid = [];
-
-            foreach ($input['post_types'] as $key => $post_type) 
-            {
-                $valid['post_types'][] = filter_var($post_type, FILTER_SANITIZE_STRING);
-            }
-
-            foreach ($input['default_settings'] as $post_type => $settings) 
-            {
-                $agadyn_custom_template_id = '';
-                $agadyn_custom_template_path = '';
-                $agadyn_custom_template_options = '';
-                if(isset($settings["agadyn_custom_template_id"]))
-                {
-                    $agadyn_custom_template_id = $settings["agadyn_custom_template_id"];
-                    $agadyn_custom_template_path = get_post_meta( $settings["agadyn_custom_template_id"], '_wp_attached_file', true );
-
-                }
-                if(isset($settings["agadyn_custom_template_options"]))
-                {
-                    $agadyn_custom_template_options = $settings["agadyn_custom_template_options"];
-                }   
-                $valid['default_settings'][$post_type]['agadyn_custom_template_id'] = $agadyn_custom_template_id;
-                $valid['default_settings'][$post_type]['agadyn_custom_template_path'] = $agadyn_custom_template_path;
-                $valid['default_settings'][$post_type]['agadyn_custom_template_options'] = $agadyn_custom_template_options;
-            }
-
-            // var_dump($input, $valid);
-
-            return $valid;
         }
 
         /* Add the media uploader script */
