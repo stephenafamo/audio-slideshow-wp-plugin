@@ -275,6 +275,7 @@ if (!class_exists("AudioSlideshow")) {
                 'has_archive'        => false,
                 'hierarchical'       => false,
                 'menu_position'      => null,
+                'menu_icon'          => 'dashicons-playlist-audio',
                 'supports'           => array( 'title', 'author' )
                 );
 
@@ -303,7 +304,7 @@ if (!class_exists("AudioSlideshow")) {
                 if(is_array($audio_slideshow_slides)) {
                     foreach ($audio_slideshow_slides as $key => $slide) {
                         ?>
-                        <div data-slide-start="<?= $slide['time'] ?>" id="audio_slideshow_slide_<?= $random_number ?>_<?= $key ?>" style="display: none;"><?= $slide['markup'] ?></div>
+                        <div data-slide-start="<?= $slide['time'] ?>" id="audio_slideshow_slide_<?= $random_number ?>_<?= $key ?>" style="display: none;"><?= htmlspecialchars_decode($slide['markup']); ?></div>
                         <?php
                     }
                 } 
